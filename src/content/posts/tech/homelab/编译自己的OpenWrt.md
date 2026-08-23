@@ -4,7 +4,7 @@ published: 2025-08-02
 description: 记录 OpenWrt 固件的编译流程，以及创建系统后的基本配置方法。
 image: ''
 tags: [OpenWrt, 路由器, 固件编译, 家庭实验室]
-category: homelab
+category: Tech
 draft: false
 lang: zh_CN
 ---

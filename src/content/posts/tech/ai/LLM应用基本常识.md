@@ -4,7 +4,7 @@ published: 2026-03-04
 description: 系统梳理从 RNN、Transformer、词嵌入到 LLM、Prompt、上下文和智能体的基础概念。
 image: ''
 tags: [NLP, Transformer, LLM, RAG]
-category: ai
+category: Tech
 draft: false
 lang: zh_CN
 ---

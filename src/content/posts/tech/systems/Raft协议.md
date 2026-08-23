@@ -4,7 +4,7 @@ published: 2026-03-23
 description: 介绍 Raft 协议如何通过 Leader 选举、心跳和日志复制，在分布式系统中实现一致性。
 image: ''
 tags: [Raft, 分布式系统, 一致性, 共识算法]
-category: systems
+category: Tech
 draft: false
 lang: zh_CN
 ---

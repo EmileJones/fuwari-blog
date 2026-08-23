@@ -4,7 +4,7 @@ published: 2026-03-09
 description: 总结领域驱动设计在项目中的实践经验，涵盖限界上下文、架构演进、过度设计和业务技术边界。
 image: ''
 tags: [DDD, 领域驱动设计, 架构设计, 软件工程]
-category: software-engineering
+category: Tech
 draft: false
 lang: zh_CN
 ---

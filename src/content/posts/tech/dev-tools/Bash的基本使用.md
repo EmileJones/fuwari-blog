@@ -4,7 +4,7 @@ published: 2025-08-25
 description: 介绍 Bash 的编码问题、环境配置、变量操作、常用命令、正则处理工具和 Shell 脚本编写习惯。
 image: ''
 tags: [Bash, Shell, Linux, 命令行]
-category: dev-tools
+category: Tech
 draft: false
 lang: zh_CN
 ---
