@@ -9,13 +9,11 @@ draft: false
 lang: zh_CN
 ---
 
-# Java代理机制
-
 在被 Spring AOP 的八股碎语反复折磨后，我决定回归技术本质，通过拆解底层原理来终结这种碎片化的记忆。
 
 本文将系统梳理 Java 代理的三种实现路径：**静态代理**、**JDK 动态代理** 与 **CGLIB**。
 
-## 静态代理
+# 静态代理
 
 静态代理即传统的代理模式实现，其核心特征是**运行时开销极小**，但存在**硬编码导致的类数量膨胀**问题。
 
@@ -66,7 +64,7 @@ public class Client {
 }
 ```
 
-## JDK 动态代理
+# JDK 动态代理
 
 JDK动态代理就是使用Java自带的反射，其性能损耗主要源于以下四个维度：
 
@@ -153,13 +151,13 @@ JDK 动态代理生成的代理类必须继承 `Proxy` 类，由于 Java 不支�
 
 这一底层限制导致在 Spring Boot 1.x 版本中，默认生成的代理 Bean 仅具备接口类型。因此，依赖注入只能通过接口来接收；若开发者强行使用具体实现类来接收注入，就会因类型不匹配而报错。
 
-## CGLIB代理
+# CGLIB代理
 
 CGLIB 是后来为了弥补 JDK 动态代理的特定缺陷而诞生的开源解决方案。为了突破官方 **“必须有接口”** 的硬性限制，开源社区推出了 CGLIB。
 
 CGLIB 凭借 **FastClass** 机制大幅提升了代码运行期的执行效率。但作为代价，代理单一目标类通常需要在底层动态生成 3 个全新的 Class 文件。这种重度依赖字节码生成的机制不仅会拖慢应用启动速度，还极易引发 JVM 元空间膨胀，是其核心缺陷。
 
-### FastClass 
+## FastClass
 
 FastClass 的思路则是，给每个方法编一个整数编号，例如：
 
@@ -202,7 +200,7 @@ public Object invoke(int index, Object obj, Object[] args) {
 fastClass.invoke(0, service, new Object[]{"Tom"});
 ```
 
-### 生成的class文件
+## 生成的class文件
 
 CGLIB创建 **一个** 代理类后，会生成 **三个** 新的类：
 
@@ -302,7 +300,7 @@ CGLIB创建 **一个** 代理类后，会生成 **三个** 新的类：
 >
 > 其中methodProxy会找到桥接方法：CGLIB$save$0，就可以避免无限循环，其中methodProxy会通过代理类的 FastClass 来找到 `CGLIB$save$0()` 方法并且调用。
 
-### CGLIB代理流程
+## CGLIB代理流程
 
 Springboot中多数情况如下所示：
 
