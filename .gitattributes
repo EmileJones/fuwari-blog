@@ -1,0 +1,19 @@
+# Keep text files consistent across Windows, Linux, and macOS.
+* text=auto eol=lf
+
+# Windows command scripts require CRLF line endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never modify binary files.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
