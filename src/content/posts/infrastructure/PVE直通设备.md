@@ -4,7 +4,7 @@ published: 2025-08-02
 description: 记录在 Proxmox VE 中配置显卡、SATA 硬盘和 SATA 控制器直通的实践方法。
 image: ''
 tags: [PVE, Proxmox VE, 虚拟化, 设备直通]
-category: Tech
+category: Infrastructure
 draft: false
 lang: zh_CN
 ---

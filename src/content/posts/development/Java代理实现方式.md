@@ -4,7 +4,7 @@ published: 2026-08-23
 description: 介绍静态代理、JDK 动态代理和 CGLIB 三种 Java 代理实现方式，并分析反射调用的性能开销与 Spring Boot 的代理策略。
 image: ''
 tags: [Java, 代理模式, 动态代理, CGLIB, 软件工程]
-category: Tech
+category: Development
 draft: false
 lang: zh_CN
 ---
@@ -461,7 +461,6 @@ sequenceDiagram
     Interceptor-->>Proxy: result
     Proxy-->>Caller: result
 ```
-
 
 
 

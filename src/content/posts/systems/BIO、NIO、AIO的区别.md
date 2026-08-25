@@ -4,7 +4,7 @@ published: 2025-09-30
 description: 从阻塞、非阻塞和异步模型出发，对比 BIO、NIO、AIO 的工作方式、零拷贝和典型应用场景。
 image: ''
 tags: [Java, BIO, NIO, AIO]
-category: Tech
+category: Systems
 draft: false
 lang: zh_CN
 ---

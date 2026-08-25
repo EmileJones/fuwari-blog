@@ -4,7 +4,7 @@ published: 2025-08-02
 description: 记录 NeoVim 的模式切换、文本编辑、查找替换、窗口管理和 VSCode 集成使用方法。
 image: ''
 tags: [NeoVim, Vim, VSCode, 编辑器]
-category: Notes
+category: Tools
 draft: false
 lang: zh_CN
 ---
