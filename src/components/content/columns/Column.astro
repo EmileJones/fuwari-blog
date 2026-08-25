@@ -1,0 +1,21 @@
+<div class="column">
+	<slot />
+</div>
+
+<style>
+	.column {
+		min-width: 0;
+		padding: 1rem 1.1rem;
+		border: 1px solid color-mix(in srgb, var(--line-divider) 75%, transparent);
+		border-radius: var(--radius-large);
+		background: color-mix(in srgb, var(--card-bg) 72%, var(--primary) 4%);
+	}
+
+	.column :global(> :first-child) {
+		margin-top: 0;
+	}
+
+	.column :global(> :last-child) {
+		margin-bottom: 0;
+	}
+</style>

@@ -1,0 +1,33 @@
+---
+interface Props {
+	columns?: number | string;
+	gap?: string;
+	minWidth?: string;
+}
+
+const { columns = 2, gap = "1rem", minWidth = "16rem" } = Astro.props;
+
+const columnCount = Math.max(1, Number(columns) || 2);
+---
+
+<div
+	class="columns-layout"
+	style={`--columns-count: ${columnCount}; --columns-gap: ${gap}; --columns-min-width: ${minWidth};`}
+>
+	<slot />
+</div>
+
+<style>
+	.columns-layout {
+		display: grid;
+		grid-template-columns: repeat(var(--columns-count), minmax(0, 1fr));
+		gap: var(--columns-gap);
+		margin: 1.5rem 0;
+	}
+
+	@media (max-width: 48rem) {
+		.columns-layout {
+			grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--columns-min-width)), 1fr));
+		}
+	}
+</style>
