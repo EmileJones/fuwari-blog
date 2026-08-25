@@ -15,7 +15,7 @@ lang: zh_CN
 
 ## RNN
 
-![](imgs/RNN.png)
+[RNN循环神经网络结构图](./imgs/RNN.png)
 
 **RNN的运行步骤（如图所示）如下：**
 
@@ -51,7 +51,7 @@ lang: zh_CN
 
 由于RNN架构有很多问题，Google提出了新的架构Transformer架构，他引入了注意力机制：
 
-![](imgs/Transformer.jpg)
+[Transformer编码器-解码器结构图](./imgs/Transformer.jpg)
 
 Transformer 认为：既然文字已经数字化成了向量，为什么不让每个词直接和全句的所有词进行对话呢？
 

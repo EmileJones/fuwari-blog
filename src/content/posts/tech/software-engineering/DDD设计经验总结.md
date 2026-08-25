@@ -47,7 +47,7 @@ lang: zh_CN
 
 针对原有系统职责不清、向量数据管理混乱的问题，本次重构在战略层面将系统划分为三个限界上下文（Bounded Context）：`DocumentManagementBC`、`PipelineBC` 和 `KnowledgeManagerBC`。
 
-![](imgs/DDD-experience.png)
+[文档管理领域的DDD流程图](./imgs/DDD-experience.png)
 
 ## 核心上下文拆解
 
