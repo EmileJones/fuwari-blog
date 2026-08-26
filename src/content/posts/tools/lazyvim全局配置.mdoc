@@ -1,0 +1,227 @@
+---
+title: "LazyVim 全局配置"
+published: 2026-08-26
+description: "记录 LazyVim 的鼠标支持、隐藏文件显示、Git 忽略文件搜索和全局 MarkdownLint 配置方法。"
+image: ""
+tags: [LazyVim, Neovim, 配置, MarkdownLint, 开发工具]
+category: Tools
+draft: false
+lang: zh_CN
+---
+
+# 全局配置内容
+
+当前对 LazyVim 做以下全局配置，可以执行 {% download href="/downloads/setup_lazyvim.sh" text="快速配置脚本" /%} 快速配置。
+
+## 开启鼠标功能
+
+在 Neovim / LazyVim 的常用模式中启用鼠标，使鼠标可以用于点击窗口、移动光标、选择文本等操作。
+
+## 显示隐藏文件和 Git 忽略文件
+
+调整 Snacks 的 Explorer、Find Files 和 Grep 行为：
+
+- Explorer 默认显示以 `.` 开头的隐藏文件和目录。
+- Explorer 默认显示被 `.gitignore` 忽略的文件和目录。
+- Find Files 搜索时包含隐藏文件。
+- Find Files 搜索时包含被 `.gitignore` 忽略的文件。
+- Grep 全文搜索时包含隐藏文件和隐藏目录中的内容。
+
+## 使用全局 MarkdownLint 配置
+
+所有项目默认使用统一的 MarkdownLint 配置，并禁用以下规则：
+
+- `MD013`：行长度检查。
+- `MD025`：一个文档只能存在一个一级标题的检查。
+
+LazyVim 中的 Markdown lint 和 Markdown 格式化都显式使用同一份全局 MarkdownLint 配置文件。
+
+---
+
+# 配置方法
+
+需要长期维护以下配置文件：
+
+```text
+~/.config/nvim/
+└── lua/
+    ├── config/
+    │   └── options.lua
+    │
+    └── plugins/
+        ├── snacks.lua
+        └── markdownlint.lua
+
+~/.config/markdownlint/
+└── .markdownlint.yaml
+```
+
+## 配置鼠标
+
+配置文件：
+
+```text
+~/.config/nvim/lua/config/options.lua
+```
+
+配置内容：
+
+```lua
+-- 在 Neovim 的所有常用模式下启用鼠标。
+-- "a" 表示 Normal、Visual、Insert、Command 等模式都允许使用鼠标。
+vim.opt.mouse = "a"
+```
+
+---
+
+## 配置 Snacks Explorer、Find Files 和 Grep
+
+配置文件：
+
+```text
+~/.config/nvim/lua/plugins/snacks.lua
+```
+
+如果文件不存在，可以自行创建。
+
+配置内容：
+
+```lua
+return {
+  {
+    "folke/snacks.nvim",
+    opts = {
+      picker = {
+        sources = {
+          explorer = {
+            -- Explorer 默认显示隐藏文件和隐藏目录。
+            -- 例如：.env、.github、.config 等。
+            hidden = true,
+
+            -- Explorer 默认显示被 .gitignore 忽略的文件和目录。
+            -- 例如：node_modules、dist 等，具体取决于项目的 .gitignore。
+            ignored = true,
+          },
+
+          files = {
+            -- Find Files 搜索文件时包含隐藏文件和隐藏目录。
+            hidden = true,
+
+            -- Find Files 搜索文件时包含被 .gitignore 忽略的文件和目录。
+            ignored = true,
+          },
+
+          grep = {
+            -- Grep 全文搜索时包含隐藏文件和隐藏目录中的内容。
+            hidden = true,
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+配置后的行为：
+
+```text
+Explorer
+├── 显示隐藏文件
+└── 显示 .gitignore 忽略的文件
+
+Find Files
+├── 搜索隐藏文件
+└── 搜索 .gitignore 忽略的文件
+
+Grep
+└── 搜索隐藏文件中的内容
+```
+
+---
+
+## 配置全局 MarkdownLint 规则
+
+全局 MarkdownLint 配置文件：
+
+```text
+~/.config/markdownlint/.markdownlint.yaml
+```
+
+如果目录不存在，可以先创建：
+
+```bash
+mkdir -p ~/.config/markdownlint
+```
+
+配置内容：
+
+```yaml
+# MD013：行长度检查。
+# false 表示不再因为 Markdown 单行过长而产生 lint 警告。
+MD013: false
+
+# MD025：一个 Markdown 文档只能存在一个一级标题。
+# false 表示允许同一文档中存在多个 "# 一级标题"。
+MD025: false
+```
+
+---
+
+## 让 LazyVim 使用全局 MarkdownLint 配置
+
+配置文件：
+
+```text
+~/.config/nvim/lua/plugins/markdownlint.lua
+```
+
+这个配置用于让 LazyVim 中的 Markdown lint 和 Markdown 格式化都显式读取：
+
+```text
+~/.config/markdownlint/.markdownlint.yaml
+```
+
+配置内容：
+
+```lua
+-- 定义所有项目默认使用的全局 MarkdownLint 配置文件。
+local markdownlint_config =
+  vim.fn.expand("~/.config/markdownlint/.markdownlint.yaml")
+
+return {
+  {
+    "mfussenegger/nvim-lint",
+    opts = {
+      linters = {
+        ["markdownlint-cli2"] = {
+          -- Markdown lint 时显式指定全局 MarkdownLint 配置。
+          --
+          -- prepend_args 会在 nvim-lint 原有参数前添加这些参数，
+          -- 从而保留 nvim-lint 对 markdownlint-cli2 的默认调用方式。
+          prepend_args = {
+            "--config",
+            markdownlint_config,
+            "--",
+          },
+        },
+      },
+    },
+  },
+
+  {
+    "stevearc/conform.nvim",
+    opts = {
+      formatters = {
+        ["markdownlint-cli2"] = {
+          -- Markdown 格式化时也显式使用同一份全局配置，
+          -- 保证 lint 和 format 使用一致的 MarkdownLint 规则。
+          prepend_args = {
+            "--config",
+            markdownlint_config,
+          },
+        },
+      },
+    },
+  },
+}
+```
