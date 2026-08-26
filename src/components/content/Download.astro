@@ -1,0 +1,15 @@
+---
+interface Props {
+	href: string;
+	text: string;
+	filename?: string;
+}
+
+const { href, text, filename } = Astro.props;
+const defaultFilename = href.split(/[?#]/, 1)[0].split("/").pop() || "download";
+const downloadFilename = filename || defaultFilename;
+---
+
+<a href={href} download={downloadFilename} class="link">
+	{text}
+</a>

@@ -2,16 +2,13 @@ import { component, defineMarkdocConfig } from "@astrojs/markdoc/config";
 
 export default defineMarkdocConfig({
 	tags: {
-		columns: {
-			render: component("./src/components/content/columns/Columns.astro"),
+		download: {
+			render: component("./src/components/content/Download.astro"),
 			attributes: {
-				columns: { type: Number, default: 2 },
-				gap: { type: String, default: "1rem" },
-				minWidth: { type: String, default: "16rem" },
+				href: { type: String, required: true },
+				text: { type: String, required: true },
+				filename: { type: String },
 			},
-		},
-		column: {
-			render: component("./src/components/content/columns/Column.astro"),
 		},
 	},
 });
