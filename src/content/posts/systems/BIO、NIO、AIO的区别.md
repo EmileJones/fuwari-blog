@@ -17,32 +17,48 @@ lang: zh_CN
 
 以下是传统BIO的方式处理访问的代码：
 
-    {
-     ExecutorService executor = Excutors.newFixedThreadPollExecutor(100);//线程池
-    
-     ServerSocket serverSocket = new ServerSocket();
-     serverSocket.bind(8088);
-     while(!Thread.currentThread.isInturrupted()){//主线程死循环等待新连接到来
-     Socket socket = serverSocket.accept();
-     executor.submit(new ConnectIOnHandler(socket));//为新的连接创建新的线程
-    }
-    
-    class ConnectIOnHandler extends Thread{
-        private Socket socket;
-        public ConnectIOnHandler(Socket socket){
-           this.socket = socket;
-        }
-        public void run(){
-          while(!Thread.currentThread.isInturrupted()&&!socket.isClosed()){死循环处理读写事件
-              String someThing = socket.read()....//读取数据
-              if(someThing!=null){
-                 ......//处理数据
-                 socket.write()....//写数据
-              }
-    
-          }
+```java
+public class BioServerDemo {
+    public static void main(String[] args) throws IOException {
+        ExecutorService executor = Executors.newFixedThreadPool(100);
+        ServerSocket serverSocket = new ServerSocket(8088);
+
+        while (!Thread.currentThread().isInterrupted()) {
+            Socket socket = serverSocket.accept(); // 阻塞等待连接
+            executor.submit(new ConnectionHandler(socket));
         }
     }
+}
+
+class ConnectionHandler implements Runnable {
+    private final Socket socket;
+
+    public ConnectionHandler(Socket socket) {
+        this.socket = socket;
+    }
+
+    @Override
+    public void run() {
+        try (InputStream in = socket.getInputStream();
+             OutputStream out = socket.getOutputStream()) {
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            // 阻塞读取数据
+            while ((bytesRead = in.read(buffer)) != -1) {
+                // 处理数据并写回
+                out.write(buffer, 0, bytesRead);
+                out.flush();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                socket.close();
+            } catch (IOException ignored) {}
+        }
+    }
+}
+```
 
 该模型的关键短板在于严重依赖内核线程（thread）。线程虽然比完整进程轻量，但仍是内核可调度的实体，因此带来若干问题：
 
@@ -110,82 +126,119 @@ public static void transferFileContents(SocketChannel socket, Path file) throws 
 
 ## 非阻塞理念
 
-NIO 全称为 **Non-blocking I/O**（非阻塞输入/输出）。其非阻塞特性体现在：当通道（Channel）处于非阻塞模式时，调用 `read()` 或 `write()` 不会让线程阻塞，如果数据尚未准备好，方法会立即返回（Java中会返回0），而不是等待数据就绪。所以 NIO 需要通过 **轮询** 来保证数据被传输完成。
+NIO 在 Java 官方规范中全称为 **New I/O**，因其提供了非阻塞特性，常被俗称为 **Non-blocking I/O**。
 
-在 **本地磁盘读写** 场景下，NIO 与传统 BIO 在吞吐和延迟上通常没有显著差距（瓶颈更多来自磁盘带宽、缓存命中等）。NIO 的优势在网络传输场景更明显。
+其非阻塞特性体现在网络通道（`SocketChannel`）上：当通道配置为非阻塞模式时，调用 `read()` 或 `write()` 不会阻塞线程；若底层缓冲区未就绪，方法会立即返回 0，而不是死等。但如果由用户线程不断调用 `read()` 检查数据，会导致 CPU 空转（忙轮询）。因此，NIO 必须结合 **Selector（多路复用器）** 一同使用——利用操作系统底层的 I/O 多路复用机制（如 Linux 的 `epoll`），让单线程在无事件时休眠，有事件就绪时被内核精准唤醒，以事件驱动替代忙轮询。
 
-在网络场景下，如果使用 BIO（阻塞 I/O），每个 Socket 连接都必须由一个线程阻塞等待数据到达，这在高并发情况下会消耗大量线程资源，造成资源浪费。NIO（非阻塞 I/O）通过 Selector 等多路复用机制，让少量线程即可管理大量 Socket 连接，实现非阻塞的高效资源利用。
+在**网络通信**场景下，传统的 BIO 采用“一连接一线程”模型，连接数增多会导致线程栈内存爆炸与频繁的内核上下文切换；NIO 通过 Selector 多路复用，仅需少量线程即可同时监听海量连接，极大降低了系统资源消耗。
 
-[NIO线程、选择器与通道关系图](./imgs/NIO.png)
+在**本地磁盘读写**场景下，操作系统的常规文件 I/O 并不支持非阻塞模式（Java 的 `FileChannel` 也无法注册到 `Selector`）。NIO 在磁盘层面的性能优势并非来自非阻塞，而是来自其提供的底层高性能接口：包括**堆外直接内存（`DirectByteBuffer`）**、**内存映射文件（`MappedByteBuffer`）** 以及支持零拷贝的 **`FileChannel.transferTo`**。
+
+![NIO线程、选择器与通道关系图](./imgs/NIO.png)
+
+```
+[ 网卡收到报文 ]
+       │
+       │(硬件中断触发)
+       ▼ 
+[ Linux 内核网络协议栈处理 ] ──> 调用 ep_poll_callback() ──> [ 数据挂入 socket 接收队列 ]
+                                                                 │
+                                                                 ▼
+                                                  [ 将该 epitem 放入 rdlist (就绪链表) ]
+                                                                 │
+                                                                 ▼
+                                                    [ 唤醒正在 epoll_wait 上休眠的线程 ]
+                                                                 │
+                                                                 ▼
+                                           [ Java 线程退出 selector.select() 阻塞状态 ]
+                                           
+其中：
+1. epitem 是内核为每一个被加入 epoll 监控的文件描述符（如 Socket FD）创建的包装结构体。
+2. 当调用 epoll_wait 时，内核完全不需要去遍历红黑树上的几万个 FD，只需要检查 rdlist 是否为空，如果不为空，直接遍历 rdlist，把里面的事件信息打包复制到用户态内存空间，清空或按模式重整链表后返回
+```
 
 以下是通过Java代码来展示一种通过NIO进行网络读写的方式：
 
-    public class NioServerDemo {
-        public static void main(String[] args) throws IOException {
-            int port = 9000;
-    
-            // 1. 创建非阻塞 ServerSocketChannel
-            ServerSocketChannel serverChannel = ServerSocketChannel.open();
-            serverChannel.bind(new InetSocketAddress(port));
-            serverChannel.configureBlocking(false);
-    
-            // 2. 创建 Selector 并注册 ACCEPT 事件
-            Selector selector = Selector.open();
-            serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-    
-            System.out.println("NIO Server listening on port " + port);
-    
-            ByteBuffer buffer = ByteBuffer.allocate(1024);
-    
-            while (true) {
-                selector.select(); // 阻塞直到有事件
-                Set<SelectionKey> keys = selector.selectedKeys();
-                Iterator<SelectionKey> iter = keys.iterator();
-    
-                while (iter.hasNext()) {
-                    SelectionKey key = iter.next();
-                    iter.remove();
-    
-                    if (key.isAcceptable()) {
-                        // 接受新连接
-                        SocketChannel client = serverChannel.accept();
-                        client.configureBlocking(false);
-                        client.register(selector, SelectionKey.OP_READ);
-                        System.out.println("Accepted connection from " + client.getRemoteAddress());
+```java
+public class NioServerDemo {
+    public static void main(String[] args) throws IOException {
+        int port = 9000;
+
+        // 1. 创建非阻塞 ServerSocketChannel
+        ServerSocketChannel serverChannel = ServerSocketChannel.open();
+        serverChannel.bind(new InetSocketAddress(port));
+        serverChannel.configureBlocking(false);
+
+        // 2. 创建 Selector 并注册 ACCEPT 事件
+        Selector selector = Selector.open();
+        serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+
+        System.out.println("NIO Server listening on port " + port);
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        while (true) {
+            selector.select(); // 阻塞直到有事件
+            Set<SelectionKey> keys = selector.selectedKeys();
+            Iterator<SelectionKey> iter = keys.iterator();
+
+            while (iter.hasNext()) {
+                SelectionKey key = iter.next();
+                iter.remove();
+
+                if (key.isAcceptable()) {
+                    // 接受新连接
+                    SocketChannel client = serverChannel.accept();
+                    client.configureBlocking(false);
+                    client.register(selector, SelectionKey.OP_READ);
+                    System.out.println("Accepted connection from " + client.getRemoteAddress());
+                }
+
+                else if (key.isReadable()) {
+                    // 客户端可读
+                    SocketChannel client = (SocketChannel) key.channel();
+                    buffer.clear();
+                    int bytesRead = client.read(buffer);
+
+                    if (bytesRead == -1) {
+                        key.cancel();
+                        client.close();
+                        System.out.println("Client disconnected");
+                        continue;
                     }
-    
-                    else if (key.isReadable()) {
-                        // 客户端可读
-                        SocketChannel client = (SocketChannel) key.channel();
-                        buffer.clear();
-                        int bytesRead = client.read(buffer);
-    
-                        if (bytesRead == -1) {
-                            key.cancel();
-                            client.close();
-                            System.out.println("Client disconnected");
-                            continue;
-                        }
-    
-                        buffer.flip();
-                        client.write(buffer); // 回写数据
-                    }
+
+                    buffer.flip();
+                    client.write(buffer); // 回写数据
                 }
             }
         }
     }
+}
+```
 
 # AIO
 
-为了解决 NIO 中可能存在的轮询问题（线程需要不断检查通道是否就绪），AIO（Asynchronous I/O，异步输入/输出）被设计出来。与 NIO 的非阻塞 I/O 不同，AIO 是一种 **真正的异步 I/O 模型**：应用线程在发起读/写操作后立即返回，无需阻塞或轮询，内核在后台完成 I/O 操作，并在操作完成时通过 **回调或异步通知机制** 告知应用程序。
+为了进一步解耦 I/O 操作与应用线程，Java 7 引入了 NIO.2，也就是常说的 **AIO（Asynchronous I/O，异步 I/O）**。
 
-AIO 相当于为每个 Socket 聘请了一个 **硬件级代理**。在 BIO 中，你需要亲自动用 CPU 线程去死等并搬运数据；而在 AIO 中，你只需交给操作系统一个地址（Buffer）。随后，操作系统会 **调动 DMA 硬件，让数据绕过 CPU 直接从网卡搬运到你的内存中**。整个'盯着网卡'和'搬运数据'的过程不占用任何线程资源，直到 DMA 完成最后一块数据的拷贝，操作系统才会触发回调函数通知你。这就像是把'体力活'外包给了底层硬件，实现了真正的零阻塞。
+NIO 与 AIO 的核心分歧在于 **Reactor（就绪通知）** 与 **Proactor（完成通知）** 两种模型的差异：
 
-因此，AIO 并不是 NIO 的"新版本"，而是为高并发场景下提高线程利用率和系统性能而设计的另一种 I/O 模型，它可以与 NIO、BIO 配合使用，但在设计理念上是独立的。
+- **NIO（就绪驱动）**：操作系统通知应用程序“数据已到达内核缓冲区，可以读了”，随后**应用线程必须亲自发起系统调用，将数据从内核空间拷贝至用户空间缓冲区**。拷贝过程中线程处于同步等待状态。
+- **AIO（完成驱动）**：应用程序预先分配用户态缓冲区（`ByteBuffer`）并提交给操作系统，调用即刻返回。操作系统在内核中完成**数据接收、协议栈解析以及从内核态到用户态的内存拷贝**全过程。直到数据已被完整写入用户缓冲区后，系统才通过回调（`CompletionHandler`）通知应用直接处理业务数据。
+
+换言之，AIO 是**将“等待数据就绪”和“内核到用户态的数据搬运”这两道工序全部托管给操作系统**，应用层不再感知任何 I/O 阻塞。
+
+**需要注意的是**，AIO 在不同操作系统上的底层实现差异极大：
+
+- 在 **Windows** 平台上，底层依托成熟的内核级 **IOCP（I/O Completion Ports）**，是真正意义上的系统级异步 I/O。
+- 在 **Linux** 平台上，内核原生的 AIO（`libaio`）长期仅支持带 `O_DIRECT` 的本地文件，不支持网络 Socket。因此 Java AIO 在 Linux 底层依然是依赖 `epoll` 配合线程池模拟实现的，不仅没有带来预期中的性能飞跃，反而引入了额外的线程切换与内存开销。这也是主流网络框架（如 Netty）选择放弃 Java AIO、坚持采用基于 Linux 原生 `epoll` 的 NIO 模型的原因。
+
+> `O_DIRECT` 是 Linux 系统中打开文件（`open()` / `openat()` 系统调用）时可传入的一个标志位（Flag），用于开启**直接 I/O（Direct I/O）**。
+>
+> 它的核心作用是：在进行文件读写时，完全绕过操作系统的内核页缓存（Page Cache），**直接在用户空间缓冲区与存储设备之间进行数据传输**。
 
 可以参考如下Java代码去理解：
 
-``` auto
+``` java
 private static void writeFile(AsynchronousSocketChannel client, AsynchronousFileChannel fileChannel,
                               ByteBuffer buffer, long position) {
     fileChannel.read(buffer, position, null, new CompletionHandler<Integer, Void>() {
@@ -222,14 +275,11 @@ private static void writeFile(AsynchronousSocketChannel client, AsynchronousFile
 
 # 总结
 
-| 特性 / 类型 | BIO（Blocking I/O） | NIO（Non-blocking I/O） | AIO（Asynchronous I/O） |
-|----|----|----|----|
-| **中文名称** | 阻塞 I/O | 非阻塞 I/O | 异步 I/O |
-| **I/O 模型** | 同步阻塞 | 同步非阻塞 | 异步通知 |
-| **线程行为** | 读写操作会阻塞线程，线程等待数据完成 | 线程可以非阻塞轮询，检查通道是否就绪 | 线程发起操作后立即返回，内核完成后通知线程 |
-| **操作方式** | 阻塞等待数据到来 | 不阻塞，可轮询就绪状态 | 不阻塞，内核异步回调完成 |
-| **典型应用** | 小规模客户端、简单网络通信 | 高并发服务器（避免每个请求一个线程） | 高并发、大量连接、性能敏感场景 |
-| **解决问题** | 简单易用，但线程资源消耗大 | 解决 BIO 的线程阻塞问题，提高并发处理能力 | 进一步减少 CPU 轮询，提高响应效率和吞吐量 |
-| **缺点** | 线程占用资源高，扩展性差 | 编程复杂，需要管理 Selector 和缓冲区 | 编程更复杂，需要回调处理，调试不易 |
-| **数据流处理** | 阻塞式读取 | 可以非阻塞读取 | 由内核异步完成数据传输（有回调） |
-| **适合场景** | 小型应用、客户端、低并发 | 高并发服务器、需要减少线程数 | 高并发服务器、文件传输、网络传输、大量连接场景 |
+| **特性 / 维度**  | **BIO（Blocking I/O）**                                | **NIO（New I/O / 多路复用）**                           | **AIO（NIO.2 / 异步 I/O）**                                  |
+| ---------------- | ------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------ |
+| **内核驱动模式** | 阻塞等待数据到达并阻塞拷贝                             | **Reactor 模式（就绪通知）**                            | **Proactor 模式（完成通知）**                                |
+| **线程行为**     | 线程发起 I/O 后一直阻塞等待                            | 线程阻塞在 `Selector.select()` 上，有事件就绪时唤醒分发 | 线程发起 I/O 后立即返回，底层完成拷贝后通过回调通知          |
+| **数据拷贝阶段** | 用户线程同步阻塞拷贝（内核 $\to$ 用户）                | 用户线程被唤醒后，**亲自发起系统调用同步拷贝**          | **操作系统在后台直接将数据拷贝进用户态缓冲区**               |
+| **适合场景**     | 连接数少且架构简单的传统系统；JDK 21+ 虚拟线程网络编程 | **Linux 平台高并发网络服务（Netty/Tomcat 核心基石）**   | **Windows 平台网络服务（IOCP 底层）**、大文件异步读写        |
+| **局限 / 缺点**  | 传统线程模型下并发连接数严重受限                       | 编程与状态管理复杂，存在粘包半包、断连等细节处理        | Linux 原生 Socket 异步支持不足（Java AIO 依赖线程池模拟），生态支持弱 |
+
